@@ -1,46 +1,14 @@
-# Используем Windows образ с Visual Studio 2022
 image: Visual Studio 2022
-
 environment:
   matrix:
-    - JDK_VERSION: 8
+    - JDK_VERSION: 11
 
-# Устанавливаем JDK
 install:
-  - choco install openjdk8 -y
-  - setx JAVA_HOME "C:\Program Files\OpenJDK\8"
-  - set PATH=%JAVA_HOME%\bin;%PATH%
+  - choco install openjdk11
   - java -version
-  - gradlew.bat --version
 
-# Скрипт сборки и тестирования
+build: off
+
 build_script:
-  # 1. Сборка проекта
-  - gradlew.bat clean build --info
-
-  # 2. Создаём директорию для jar
-  - if not exist src\artifacts mkdir src\artifacts
-
-  # 3. Копируем jar
-  - copy build\libs\*.jar src\artifacts\app-mbank.jar
-
-  # 4. Запускаем сервер в фоне
-  - start /B java -jar src\artifacts\app-mbank.jar
-
-  # 5. Ждём, пока сервер будет готов (макс. 20 секунд)
-  - powershell -Command "
-    $max=20; $i=0;
-    while ($i -lt $max) {
-    try {
-    $r=Invoke-WebRequest -UseBasicParsing -Uri http://localhost:9999;
-    if ($r.StatusCode -eq 200) { break }
-    } catch { Start-Sleep -Seconds 1; $i++ }
-    }
-    "
-
-  # 6. Запускаем тесты
-  - gradlew.bat test --info
-
-branches:
-  only:
-    - main
+  - java -jar ./artifacts/app-mbank.jar &
+  - ./gradlew test --info
