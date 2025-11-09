@@ -2,7 +2,7 @@ image: Visual Studio 2022
 
 environment:
   matrix:
-    - JAVA_HOME: "C:\Program Files\Eclipse Adoptium\jdk-11.0.28.6-hotspot"
+    - JAVA_HOME: "C:/Program Files/Eclipse Adoptium/jdk-11.0.28.6-hotspot"
 
 install:
   - java -version
