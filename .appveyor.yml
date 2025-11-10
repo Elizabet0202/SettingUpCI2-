@@ -1,103 +1,21 @@
-image: Visual Studio 2022
+version: '{build}'
+
+os: Windows Server 2022
 
 environment:
-  matrix:
-    - JDK_VERSION: 8   # Gradle будет работать на 8-ке
+  JAVA_HOME: 'C:\\Program Files\\Java\\jdk-11.0.19'
+  PATH: '%JAVA_HOME%\\bin;%PATH%'
 
 install:
-  # Проверим Java и Gradle wrapper
-  - java -version
-  - gradlew.bat --version
 
-  # Установим Java 11 для запуска JAR-сервера (SUT)
-  - choco install temurin11 -y
-  - ps: |
-      # Найдём java.exe от Temurin 11
-      $java11 = Get-ChildItem "C:\Program Files\Eclipse Adoptium\" -Recurse -Filter java.exe -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -like "*jdk-11*\\bin\\java.exe" } |
-                Select-Object -First 1
-      if (-not $java11) {
-        Write-Host "ERROR: Java 11 not found after install"
-        exit 1
-      }
-      $java11Path = $java11.FullName
-      Write-Host "Java 11 for SUT: $java11Path"
-      Set-Content -Path java11_path.txt -Value $java11Path
+  - cmd: start /B java -jar artifacts\app-mbank.jar
 
 build_script:
-  # 1) Собираем проект (JAR твоих тестов/кода)
-  - gradlew.bat clean build --info
 
-  # 2) Готовим учебный JAR SUT (как требует ДЗ)
-  - if not exist src\artifacts mkdir src\artifacts
-  - copy /Y build\libs\*.jar src\artifacts\app-mbank.jar
-
-  # 3) Запуск SUT на Java 11 в фоне с логом и PID
-  - ps: |
-      $jar = Join-Path $env:APPVEYOR_BUILD_FOLDER "src\artifacts\app-mbank.jar"
-      if (-not (Test-Path $jar)) {
-        Write-Host "ERROR: SUT jar not found at $jar"
-        exit 1
-      }
-
-      $java11 = Get-Content java11_path.txt
-      Write-Host "Starting SUT: "$java11" -jar "$jar""
-      $log = Join-Path $env:APPVEYOR_BUILD_FOLDER "sut.log"
-
-      # Запускаем процесс и пишем stdout/stderr в лог
-      $psi = New-Object System.Diagnostics.ProcessStartInfo
-      $psi.FileName = $java11
-      $psi.Arguments = "-jar "$jar""
-      $psi.RedirectStandardOutput = $true
-      $psi.RedirectStandardError  = $true
-      $psi.UseShellExecute = $false
-      $psi.CreateNoWindow = $true
-
-      $p = New-Object System.Diagnostics.Process
-      $p.StartInfo = $psi
-      $null = $p.Start()
-
-      # асинхронно пишем лог
-      $stdOutTask = [System.Threading.Tasks.Task]::Run({ $p.StandardOutput.ReadToEnd() }) 
-      $stdErrTask = [System.Threading.Tasks.Task]::Run({ $p.StandardError.ReadToEnd()  })
-
-      Set-Content -Path sut_pid.txt -Value $p.Id
-      Write-Host "SUT pid: $($p.Id)"
-
-      # ждём нескольких секунд, соберём первые строки лога (на всякий)
-      Start-Sleep -Seconds 2
-
-  # 4) Ждём пока SUT реально начнёт слушать порт 9999 (макс 60 сек)
-  - ps: |
-      $port = 9999
-      $max = 60
-      for ($i=0; $i -lt $max; $i++) {
-        $ok = (Test-NetConnection -ComputerName 'localhost' -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded
-        if ($ok) { Write-Host "SUT is UP on port $port"; break }
-        Start-Sleep -Seconds 1
-      }
-      if (-not $ok) {
-        Write-Host "ERROR: SUT did not open port $port within $max seconds"
-        if (Test-Path "sut.log") { Write-Host "=== SUT LOG (tail) ==="; Get-Content sut.log -Tail 200 }
-        exit 1
-      }
-
-  # 5) Запускаем тесты (они ходят на http://localhost:9999)
-  - gradlew.bat test --info
-
-  # 6) Останавливаем SUT
-  - ps: |
-      if (Test-Path sut_pid.txt) {
-        $pid = Get-Content sut_pid.txt
-        Write-Host "Stopping SUT pid $pid"
-        try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
-        Remove-Item sut_pid.txt -ErrorAction SilentlyContinue
-        Write-Host "SUT stopped"
-      }
+  - cmd: gradlew.bat test --info
 
 artifacts:
-  - path: src\artifacts\app-mbank.jar
-    name: app-mbank
+  - path: artifacts\app-mbank.jar
 
 branches:
   only:
