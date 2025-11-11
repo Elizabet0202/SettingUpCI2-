@@ -7,7 +7,6 @@ version '1.0-SNAPSHOT'
 
 java {
     sourceCompatibility = 11
-    targetCompatibility = 11
 }
 
 compileJava.options.encoding = "UTF-8"
