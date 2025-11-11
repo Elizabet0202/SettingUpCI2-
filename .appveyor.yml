@@ -1,62 +1,67 @@
 image: Visual Studio 2022
 
-environment:
-  matrix:
-    - JDK_VERSION: 8
-
 install:
+  # Проверяем, какая Java доступна
   - where java
   - java -version
-  - gradlew.bat --version
+
+  # Устанавливаем JDK 11 (встроенный AppVeyor софт)
+  - echo "Switching to JDK 11"
+  - set PATH=C:\Program Files\Eclipse Adoptium\jdk-11.0.28.6-hotspot\bin;%PATH%
+  - java -version
 
 build_script:
+  # Сборка проекта
   - gradlew.bat clean assemble --info
 
-  - if not exist src\artifacts mkdir src\artifacts
-  - copy build\libs\*.jar src\artifacts\app-mbank.jar
-
+  # Проверяем, чтоjar лежит в artifacts/
   - ps: |
-      $jar = Join-Path $env:APPVEYOR_BUILD_FOLDER "src\artifacts\app-mbank.jar"
-      if (-not (Test-Path $jar)) { Write-Host "ERROR: jar not found at $jar"; exit 1 }
-      Write-Host "Starting SUT: $jar"
-      # ВАЖНО: используем свою переменную, НЕ $pid / $PID
-      $proc = Start-Process -FilePath "java" -ArgumentList @("-jar", $jar) -NoNewWindow -PassThru
+      $jar = Join-Path $env:APPVEYOR_BUILD_FOLDER "artifacts\app-mbank.jar"
+      if (-not (Test-Path $jar)) {
+        Write-Host "ERROR: JAR NOT FOUND: $jar"
+        exit 1
+      }
+      Write-Host "JAR found: $jar"
+
+  # Запускаем сервер (SUT)
+  - ps: |
+      Write-Host "Starting SUT..."
+      $proc = Start-Process -FilePath "java" -ArgumentList @("-jar", "artifacts\app-mbank.jar") -NoNewWindow -PassThru
       $serverPid = $proc.Id
-      "PID=$serverPid" | Set-Content -Path "server_pid.txt" -Encoding ASCII
+      "PID=$serverPid" | Set-Content server_pid.txt
       Write-Host "SUT started, PID = $serverPid"
 
+  # Ждём порт 9999
   - ps: |
       $port = 9999
-      $maxWait = 45
-      Write-Host "Waiting for SUT on http://localhost:$port (timeout ${maxWait}s)..."
+      $maxWait = 40
+      Write-Host "Waiting for SUT on port $port..."
       for ($i=0; $i -lt $maxWait; $i++) {
         $ok = (Test-NetConnection -ComputerName 'localhost' -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded
-        if ($ok) { Write-Host "SUT is up on port $port"; break }
+        if ($ok) { Write-Host "✅ SUT is UP!"; break }
         Start-Sleep -Seconds 1
       }
       if ($i -ge $maxWait) {
-        Write-Host "ERROR: SUT did not start within ${maxWait}s"
-        if (Test-Path "server_pid.txt") { Get-Content server_pid.txt | Write-Host }
+        Write-Host "❌ ERROR: SUT did NOT start!"
         exit 1
       }
 
+  # Запускаем тесты
   - gradlew.bat test --info
 
+  # Останавливаем сервер
   - ps: |
-      if (Test-Path "server_pid.txt") {
+      if (Test-Path server_pid.txt) {
         $line = Get-Content server_pid.txt
         if ($line -match "PID=(\d+)") {
-          $serverPid = [int]$Matches[1]
-          Write-Host "Stopping SUT pid $serverPid"
-          Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
+          $pid = [int]$Matches[1]
+          Write-Host "Stopping SUT PID $pid"
+          Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
         }
-        Remove-Item server_pid.txt -ErrorAction SilentlyContinue
-      } else {
-        Write-Host "No server_pid.txt found — nothing to stop"
       }
 
 artifacts:
-  - path: src\artifacts\app-mbank.jar
+  - path: artifacts/app-mbank.jar
     name: app-mbank
 
 branches:
