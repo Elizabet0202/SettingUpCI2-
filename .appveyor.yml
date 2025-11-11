@@ -1,14 +1,19 @@
 image: Visual Studio 2022
+
 environment:
   matrix:
     - JDK_VERSION: 11
 
 install:
-  - choco install openjdk11
   - java -version
+  - java -jar ./artifacts/app-mbank.jar &  # запускаем учебный сервис в фоне
+  - chmod +x ./gradlew
 
 build: off
 
 build_script:
-  - java -jar ./artifacts/app-mbank.jar &
   - ./gradlew test --info
+
+branches:
+  only:
+    - main
