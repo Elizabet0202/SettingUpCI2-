@@ -1,69 +1,14 @@
 image: Visual Studio 2022
+environment:
+  matrix:
+    - JDK_VERSION: 11
 
 install:
-  # Проверяем, какая Java доступна
-  - where java
+  - choco install openjdk11
   - java -version
 
-  # Устанавливаем JDK 11 (встроенный AppVeyor софт)
-  - echo "Switching to JDK 11"
-  - set PATH=C:\Program Files\Eclipse Adoptium\jdk-11.0.28.6-hotspot\bin;%PATH%
-  - java -version
+build: off
 
 build_script:
-  # Сборка проекта
-  - gradlew.bat clean assemble --info
-
-  # Проверяем, чтоjar лежит в artifacts/
-  - ps: |
-      $jar = Join-Path $env:APPVEYOR_BUILD_FOLDER "artifacts\app-mbank.jar"
-      if (-not (Test-Path $jar)) {
-        Write-Host "ERROR: JAR NOT FOUND: $jar"
-        exit 1
-      }
-      Write-Host "JAR found: $jar"
-
-  # Запускаем сервер (SUT)
-  - ps: |
-      Write-Host "Starting SUT..."
-      $proc = Start-Process -FilePath "java" -ArgumentList @("-jar", "artifacts\app-mbank.jar") -NoNewWindow -PassThru
-      $serverPid = $proc.Id
-      "PID=$serverPid" | Set-Content server_pid.txt
-      Write-Host "SUT started, PID = $serverPid"
-
-  # Ждём порт 9999
-  - ps: |
-      $port = 9999
-      $maxWait = 40
-      Write-Host "Waiting for SUT on port $port..."
-      for ($i=0; $i -lt $maxWait; $i++) {
-        $ok = (Test-NetConnection -ComputerName 'localhost' -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded
-        if ($ok) { Write-Host "✅ SUT is UP!"; break }
-        Start-Sleep -Seconds 1
-      }
-      if ($i -ge $maxWait) {
-        Write-Host "❌ ERROR: SUT did NOT start!"
-        exit 1
-      }
-
-  # Запускаем тесты
-  - gradlew.bat test --info
-
-  # Останавливаем сервер
-  - ps: |
-      if (Test-Path server_pid.txt) {
-        $line = Get-Content server_pid.txt
-        if ($line -match "PID=(\d+)") {
-          $pid = [int]$Matches[1]
-          Write-Host "Stopping SUT PID $pid"
-          Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-        }
-      }
-
-artifacts:
-  - path: artifacts/app-mbank.jar
-    name: app-mbank
-
-branches:
-  only:
-    - main
+  - java -jar ./artifacts/app-mbank.jar &
+  - ./gradlew test --info
