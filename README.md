@@ -1,1 +1,1 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/0jnt8ytg0cwo62hr?svg=true)](https://ci.appveyor.com/project/Elizabet0202/settingupci2)
+[![Java CI with Gradle](https://github.com/Elizabet0202/SettingUpCI2-/actions/workflows/gradle.yml/badge.svg)](https://github.com/Elizabet0202/SettingUpCI2-/actions/workflows/gradle.yml)
